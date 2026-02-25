@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,13 +41,22 @@ fun MemberListScreen(
     var selectedPlanFilter by remember { mutableStateOf(0) }
     val filterOptions = listOf(0, 1, 3, 6, 12)
 
-    // State to control our new Renew Dialog!
     var memberToRenew by remember { mutableStateOf<Member?>(null) }
 
-    val filteredMembers = if (selectedPlanFilter == 0) {
-        members
-    } else {
-        members.filter { it.planMonths == selectedPlanFilter }
+    // 👇 NEW: State to hold what the user is typing in the search bar
+    var searchQuery by remember { mutableStateOf("") }
+
+    // 👇 UPGRADED: Filter by BOTH the Plan Chip AND the Search Query!
+    val filteredMembers = members.filter { member ->
+        // 1. Check if they match the selected plan
+        val matchesPlan = if (selectedPlanFilter == 0) true else member.planMonths == selectedPlanFilter
+
+        // 2. Check if their name OR phone number contains the search text (ignoring uppercase/lowercase)
+        val matchesSearch = member.name.contains(searchQuery, ignoreCase = true) ||
+                member.phoneNumber.contains(searchQuery)
+
+        // 3. Keep them in the list only if they match BOTH filters
+        matchesPlan && matchesSearch
     }
 
     Scaffold(
@@ -62,6 +73,29 @@ fun MemberListScreen(
         }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+
+            // --- NEW: SMART SEARCH BAR ---
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp),
+                placeholder = { Text("Search by name or phone...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search Icon") },
+                trailingIcon = {
+                    // Add a little 'X' button to instantly clear the search text
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear Search")
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = MaterialTheme.shapes.medium
+            )
+
+            // --- FILTER CHIPS ROW ---
             LazyRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -94,7 +128,6 @@ fun MemberListScreen(
                         MemberItemCard(
                             member = member,
                             navController = navController,
-                            // Pass a function to open the dialog when the renew button is clicked
                             onRenewClick = { memberToRenew = member }
                         )
                     }
@@ -103,15 +136,17 @@ fun MemberListScreen(
         }
     }
 
-    // --- NEW: RENEW POP-UP DIALOG ---
     if (memberToRenew != null) {
         RenewDialog(
             member = memberToRenew!!,
             viewModel = viewModel,
-            onDismiss = { memberToRenew = null } // Close dialog when done
+            onDismiss = { memberToRenew = null }
         )
     }
 }
+
+// ... Keep your MemberItemCard and RenewDialog functions exactly the same down here!
+// (I left them out to keep the code block short, just paste this top part over your existing file)
 
 @Composable
 fun MemberItemCard(

@@ -1,11 +1,18 @@
 package com.example.gymmanager.screen
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -16,73 +23,111 @@ import com.example.gymmanager.viewmodel.AuthViewModel
 @Composable
 fun LoginScreen(
     navController: NavController,
-    authViewModel: AuthViewModel = viewModel() // Injects the ViewModel automatically!
+    authViewModel: AuthViewModel = viewModel()
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
-    // Read states from the ViewModel
     val isLoading by authViewModel.isLoading
     val errorMessage by authViewModel.errorMessage
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
     ) {
-        Text("Gym Manager", fontSize = 32.sp, modifier = Modifier.padding(bottom = 32.dp))
-
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = { Text("Email") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = { Text("Password") },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Show error message if it exists
-        if (errorMessage != null) {
-            Text(text = errorMessage!!, color = Color.Red, modifier = Modifier.padding(bottom = 8.dp))
-        }
-
-        // Show a loading spinner OR the buttons
-        if (isLoading) {
-            CircularProgressIndicator()
-        } else {
-            Button(
-                onClick = {
-                    authViewModel.login(email, password) {
-                        navController.navigate("dashboard")
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(50.dp)
-            ) {
-                Text("Login", fontSize = 18.sp)
-            }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // --- ENTERPRISE BRANDING ---
+            Icon(
+                imageVector = Icons.Rounded.AdminPanelSettings,
+                contentDescription = "Secure Login",
+                modifier = Modifier.size(80.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            TextButton(
-                onClick = {
-                    authViewModel.register(email, password) {
-                        navController.navigate("dashboard")
-                    }
+            Text(
+                text = "Gym Control Center",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "Authorized Personnel Only",
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 32.dp)
+            )
+
+            // --- STYLIZED INPUT FIELDS ---
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Admin Email") },
+                leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email Icon") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password") },
+                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password Icon") },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // --- BEAUTIFUL ERROR HANDLING ---
+            if (errorMessage != null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = errorMessage!!,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(12.dp),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
-            ) {
-                Text("New Gym? Register Here")
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // --- ACTION BUTTON ---
+            if (isLoading) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            } else {
+                Button(
+                    onClick = {
+                        authViewModel.login(email, password) {
+                            // Pro-tip: Clear the backstack so they can't "back" into the login screen!
+                            navController.navigate("dashboard") {
+                                popUpTo("login") { inclusive = true }
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(55.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+                ) {
+                    Text("Secure Login", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

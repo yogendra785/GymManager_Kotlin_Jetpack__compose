@@ -14,5 +14,7 @@ data class Member(
     @get:PropertyName("isActive")
     @set:PropertyName("isActive")
     var isActive: Boolean = true ,     // Soft delete: instead of deleting, we just mark them inactive
-    val planMonths: Int = 1
+    val planMonths: Int = 1,
+    val lastPaymentDate: Long = System.currentTimeMillis(),
+    val lastPaymentAmount: Double = 0.0
 )
