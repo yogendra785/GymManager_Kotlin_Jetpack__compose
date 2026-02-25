@@ -5,6 +5,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
 class MemberRepository {
+    // 👇 You named this 'firestore', so we must use 'firestore' everywhere
     private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
 
@@ -30,6 +31,7 @@ class MemberRepository {
             .addOnSuccessListener { onSuccess() }
             .addOnFailureListener { e -> onError(e.message ?: "Failed to add member") }
     }
+
     // Fetch members and listen for real-time updates
     fun getMembers(onSuccess: (List<Member>) -> Unit, onError: (String) -> Unit) {
         val uid = auth.currentUser?.uid
@@ -55,6 +57,7 @@ class MemberRepository {
                 }
             }
     }
+
     // Update an existing member
     fun updateMember(member: Member, onSuccess: () -> Unit, onError: (String) -> Unit) {
         val uid = auth.currentUser?.uid
@@ -64,9 +67,32 @@ class MemberRepository {
         }
 
         firestore.collection("users").document(uid).collection("members")
-            .document(member.id) // 👈 We point to the EXACT existing ID
-            .set(member)         // 👈 This overwrites the old data with the new data
+            .document(member.id)
+            .set(member)
             .addOnSuccessListener { onSuccess() }
             .addOnFailureListener { e -> onError(e.message ?: "Failed to update member") }
+    }
+
+    // Permanently delete a member from Firestore
+    fun deleteMember(
+        memberId: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val uid = auth.currentUser?.uid
+        if (uid == null) {
+            onError("User not logged in!")
+            return
+        }
+
+
+        firestore.collection("users").document(uid).collection("members")
+            .document(memberId)
+            .delete()
+            .addOnSuccessListener { onSuccess() }
+
+            .addOnFailureListener { e: Exception ->
+                onError(e.message ?: "Failed to delete member")
+            }
     }
 }

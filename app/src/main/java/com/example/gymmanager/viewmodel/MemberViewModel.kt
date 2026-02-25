@@ -238,4 +238,23 @@ class MemberViewModel : ViewModel() {
 
         return builder.toString()
     }
+
+    // Delete a member and instantly refresh the list
+    fun deleteMember(memberId: String, onSuccess: () -> Unit = {}) {
+        _isLoading.value = true
+        _errorMessage.value = null
+
+        repository.deleteMember(
+            memberId = memberId,
+            onSuccess = {
+                _isLoading.value = false
+                fetchMembers() // 👈 Re-download the list so the deleted person vanishes
+                onSuccess()
+            },
+            onError = { error ->
+                _isLoading.value = false
+                _errorMessage.value = error
+            }
+        )
+    }
 }
