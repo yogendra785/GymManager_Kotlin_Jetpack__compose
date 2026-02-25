@@ -103,7 +103,7 @@ class MemberViewModel : ViewModel() {
             val today = System.currentTimeMillis()
             val sevenDaysInMillis = 7L * 24 * 60 * 60 * 1000
             // Check if the expiry date falls between today and 7 days from now
-            member.expiryDate <= (today + sevenDaysInMillis)
+           member.isActive &&  member.expiryDate <= (today + sevenDaysInMillis)
         }
 
     // Get a list of members expiring in the next 7 days OR already expired
@@ -114,7 +114,7 @@ class MemberViewModel : ViewModel() {
 
             return _memberList.value.filter { member ->
                 // Keep them if their expiry date is before (today + 7 days)
-                member.expiryDate <= (today + sevenDaysInMillis)
+               member.isActive && member.expiryDate <= (today + sevenDaysInMillis)
             }.sortedBy { it.expiryDate } // Sort them so the oldest dates show up first
         }
 
@@ -123,12 +123,63 @@ class MemberViewModel : ViewModel() {
         return _memberList.value.find { it.id == id }
     }
 
+    //renew membership function
+    // 1-Click Renew Logic
+    fun renewMember(
+        member: Member,
+        additionalFeeString: String,
+        newPlanMonths: Int,
+        onSuccess: () -> Unit
+    ) {
+        val additionalFee = additionalFeeString.toDoubleOrNull()
+        if (additionalFee == null) {
+            _errorMessage.value = "Invalid fee amount"
+            return
+        }
+
+        _isLoading.value = true
+        _errorMessage.value = null
+
+        val today = System.currentTimeMillis()
+
+
+        val baseDate = if (member.expiryDate < today) today else member.expiryDate
+
+        // Calculate the new expiry date
+        val newExpiry = baseDate + (newPlanMonths * 30L * 24 * 60 * 60 * 1000)
+
+        // Add the new money to their lifetime total fee paid
+        val newTotalFee = member.feePaid + additionalFee
+
+        // Make a copy of the member with the upgraded details
+        val updatedMember = member.copy(
+            expiryDate = newExpiry,
+            feePaid = newTotalFee,
+            planMonths = newPlanMonths,
+            isActive = true // Reactivate them just in case!
+        )
+
+        repository.updateMember(
+            member = updatedMember,
+            onSuccess = {
+                _isLoading.value = false
+                onSuccess()
+            },
+            onError = { error ->
+                _isLoading.value = false
+                _errorMessage.value = error
+            }
+        )
+    }
+
     // Save the edited details
     fun updateMemberDetails(
         originalMember: Member,
         newName: String,
         newPhone: String,
+
         newFeeString: String,
+        isActive: Boolean,
         onSuccess: () -> Unit
     ) {
         val fee = newFeeString.toDoubleOrNull()
@@ -144,7 +195,8 @@ class MemberViewModel : ViewModel() {
         val updatedMember = originalMember.copy(
             name = newName,
             phoneNumber = newPhone,
-            feePaid = fee
+            feePaid = fee,
+            isActive = isActive
         )
 
         repository.updateMember(

@@ -5,16 +5,18 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.gymmanager.model.Member
 import com.example.gymmanager.viewmodel.MemberViewModel
@@ -25,7 +27,7 @@ import java.util.*
 @Composable
 fun MemberListScreen(
     navController: NavController,
-    viewModel: MemberViewModel = viewModel()
+    viewModel: MemberViewModel
 ) {
     LaunchedEffect(Unit) {
         viewModel.fetchMembers()
@@ -34,11 +36,12 @@ fun MemberListScreen(
     val members by viewModel.memberList
     val isLoading by viewModel.isLoading
 
-    // --- NEW: State for our filter (0 means "All") ---
     var selectedPlanFilter by remember { mutableStateOf(0) }
     val filterOptions = listOf(0, 1, 3, 6, 12)
 
-    // Filter the list locally based on the selected chip
+    // State to control our new Renew Dialog!
+    var memberToRenew by remember { mutableStateOf<Member?>(null) }
+
     val filteredMembers = if (selectedPlanFilter == 0) {
         members
     } else {
@@ -54,19 +57,13 @@ fun MemberListScreen(
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             )
         }
     ) { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-
-            // --- NEW: FILTER CHIPS ROW ---
             LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(filterOptions) { plan ->
@@ -85,11 +82,7 @@ fun MemberListScreen(
                 }
             } else if (filteredMembers.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "No members found in this category.",
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text("No members found.", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
                 LazyColumn(
@@ -98,25 +91,39 @@ fun MemberListScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(filteredMembers) { member ->
-                        MemberItemCard(member = member,navController = navController)
+                        MemberItemCard(
+                            member = member,
+                            navController = navController,
+                            // Pass a function to open the dialog when the renew button is clicked
+                            onRenewClick = { memberToRenew = member }
+                        )
                     }
                 }
             }
         }
     }
+
+    // --- NEW: RENEW POP-UP DIALOG ---
+    if (memberToRenew != null) {
+        RenewDialog(
+            member = memberToRenew!!,
+            viewModel = viewModel,
+            onDismiss = { memberToRenew = null } // Close dialog when done
+        )
+    }
 }
 
-// Upgraded Card Design
-// 👇 Add navController to the parameters here
 @Composable
-fun MemberItemCard(member: Member, navController: NavController) {
+fun MemberItemCard(
+    member: Member,
+    navController: NavController,
+    onRenewClick: () -> Unit // 👈 Added trigger for the Renew button
+) {
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     val joinDateString = dateFormat.format(Date(member.joinDate))
     val expiryDateString = dateFormat.format(Date(member.expiryDate))
 
-    // Don't forget to import androidx.compose.foundation.clickable at the top of your file if Android Studio asks!
     Card(
-        // 👇 Add the .clickable modifier here to trigger the navigation!
         modifier = Modifier
             .fillMaxWidth()
             .clickable { navController.navigate("edit_member/${member.id}") },
@@ -124,25 +131,10 @@ fun MemberItemCard(member: Member, navController: NavController) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Text(text = member.name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-
-                // --- PLAN BADGE ---
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shape = MaterialTheme.shapes.small
-                ) {
-                    Text(
-                        text = "${member.planMonths} Month",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.small) {
+                    Text("${member.planMonths} Month", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
 
@@ -150,16 +142,79 @@ fun MemberItemCard(member: Member, navController: NavController) {
             Text(text = "📞 ${member.phoneNumber}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(12.dp))
 
-            // --- DISPLAYING JOIN DATE ---
             Text(text = "Joined: $joinDateString", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-            val statusColor = if (member.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-            Text(
-                text = "Expires: $expiryDateString",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = statusColor
-            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                val statusColor = if (member.expiryDate < System.currentTimeMillis()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                Text(text = "Expires: $expiryDateString", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = statusColor)
+
+                // --- NEW: RENEW BUTTON ---
+                Button(onClick = onRenewClick, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+                    Text("Renew")
+                }
+            }
         }
     }
+}
+
+// --- NEW COMPOSABLE: The Pop-Up Dialog ---
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RenewDialog(
+    member: Member,
+    viewModel: MemberViewModel,
+    onDismiss: () -> Unit
+) {
+    var fee by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+    val planOptions = listOf(1, 3, 6, 12)
+    var selectedPlan by remember { mutableStateOf(planOptions[0]) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Renew ${member.name}") },
+        text = {
+            Column {
+                // Dropdown for months
+                ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+                    OutlinedTextField(
+                        value = "$selectedPlan Month(s)",
+                        onValueChange = {}, readOnly = true, label = { Text("New Plan") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        planOptions.forEach { selectionOption ->
+                            DropdownMenuItem(
+                                text = { Text("$selectionOption Month(s)") },
+                                onClick = {
+                                    selectedPlan = selectionOption
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                // Fee Input
+                OutlinedTextField(
+                    value = fee, onValueChange = { fee = it }, label = { Text("Fee Received (₹)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                viewModel.renewMember(member, fee, selectedPlan) {
+                    onDismiss() // Close the dialog on success
+                }
+            }) {
+                Text("Confirm Renewal")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

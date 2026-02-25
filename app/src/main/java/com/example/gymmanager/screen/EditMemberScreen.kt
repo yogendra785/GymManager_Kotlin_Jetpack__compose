@@ -9,9 +9,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.gymmanager.viewmodel.MemberViewModel
 
@@ -19,13 +19,11 @@ import com.example.gymmanager.viewmodel.MemberViewModel
 @Composable
 fun EditMemberScreen(
     navController: NavController,
-    memberId: String, // 👈 We receive the ID from navigation
-    viewModel: MemberViewModel = viewModel()
+    memberId: String,
+    viewModel: MemberViewModel
 ) {
-    // Find the member using the ID
     val member = viewModel.getMemberById(memberId)
 
-    // If something goes wrong and we can't find them, show an error
     if (member == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Member not found.")
@@ -33,10 +31,12 @@ fun EditMemberScreen(
         return
     }
 
-    // Pre-fill the text fields with their current data!
     var name by remember { mutableStateOf(member.name) }
     var phone by remember { mutableStateOf(member.phoneNumber) }
     var fee by remember { mutableStateOf(member.feePaid.toInt().toString()) }
+
+    // 👇 NEW: State to hold their active status
+    var isActive by remember { mutableStateOf(member.isActive) }
 
     val isLoading by viewModel.isLoading
     val errorMessage by viewModel.errorMessage
@@ -62,44 +62,66 @@ fun EditMemberScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Full Name") },
+                value = name, onValueChange = { name = it }, label = { Text("Full Name") },
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
-                value = phone,
-                onValueChange = { phone = it },
-                label = { Text("Phone Number") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                modifier = Modifier.fillMaxWidth()
+                value = phone, onValueChange = { phone = it }, label = { Text("Phone Number") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
-                value = fee,
-                onValueChange = { fee = it },
-                label = { Text("Fee Paid (₹)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth()
+                value = fee, onValueChange = { fee = it }, label = { Text("Total Fee Paid (₹)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // --- NEW: DEACTIVATE TOGGLE SWITCH ---
+            Surface(
+                color = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = if (isActive) "Active Member" else "Inactive / Archived",
+                            fontWeight = FontWeight.Bold,
+                            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Text(
+                            text = if (isActive) "Turn off if they left the gym." else "They will not trigger expiry alerts.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                    Switch(
+                        checked = isActive,
+                        onCheckedChange = { isActive = it }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(32.dp))
 
             if (errorMessage != null) {
                 Text(text = errorMessage!!, color = Color.Red, modifier = Modifier.padding(bottom = 8.dp))
             }
-            Spacer(modifier = Modifier.height(16.dp))
 
             if (isLoading) {
                 CircularProgressIndicator()
             } else {
                 Button(
                     onClick = {
-                        // Tell ViewModel to save the changes!
-                        viewModel.updateMemberDetails(member, name, phone, fee) {
-                            navController.popBackStack() // Go back to the list when done
+                        // 👇 Pass the isActive state to the ViewModel!
+                        viewModel.updateMemberDetails(member, name, phone, fee, isActive) {
+                            navController.popBackStack()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(55.dp)
