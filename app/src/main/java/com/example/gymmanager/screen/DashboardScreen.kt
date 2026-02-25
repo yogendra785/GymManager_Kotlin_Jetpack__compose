@@ -4,18 +4,31 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.example.gymmanager.viewmodel.MemberViewModel
 import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen(navController: NavController) {
-    // Scaffold provides the standard app layout structure (like a top bar)
+fun DashboardScreen(
+    navController: NavController,
+    viewModel: MemberViewModel = viewModel() //  Inject the ViewModel here
+) {
+    //  Tell the ViewModel to start listening to Firestore as soon as the Dashboard opens
+    LaunchedEffect(Unit) {
+        viewModel.fetchMembers()
+    }
+
+
+    // We use viewModel.memberList.value to trigger recomposition when the list changes
+    val members by viewModel.memberList
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -25,7 +38,6 @@ fun DashboardScreen(navController: NavController) {
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 actions = {
-                    // Logout Icon Button in the top right corner
                     IconButton(onClick = {
                         FirebaseAuth.getInstance().signOut()
                         navController.navigate("login") {
@@ -38,7 +50,6 @@ fun DashboardScreen(navController: NavController) {
             )
         }
     ) { paddingValues ->
-        // The main content of the dashboard
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -48,15 +59,22 @@ fun DashboardScreen(navController: NavController) {
             Text("Overview", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Row for Statistics Cards
+            // 👈 Inject our live data into the StatCards!
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // We use weight(1f) so they share the width equally
-                StatCard(title = "Total Members", value = "0", modifier = Modifier.weight(1f))
+                StatCard(
+                    title = "Total Members",
+                    value = "${viewModel.totalMembersCount}", // Live Total
+                    modifier = Modifier.weight(1f)
+                )
                 Spacer(modifier = Modifier.width(16.dp))
-                StatCard(title = "Active Now", value = "0", modifier = Modifier.weight(1f))
+                StatCard(
+                    title = "Active Now",
+                    value = "${viewModel.activeMembersCount}", // Live Active
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -65,16 +83,24 @@ fun DashboardScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                StatCard(title = "Expiring Soon", value = "0", modifier = Modifier.weight(1f))
+                StatCard(
+                    title = "Expiring Soon",
+                    value = "${viewModel.expiringSoonCount}", // Live Expiring
+                    modifier = Modifier.weight(1f)
+                )
                 Spacer(modifier = Modifier.width(16.dp))
-                StatCard(title = "Pending Dues", value = "₹0", modifier = Modifier.weight(1f))
+                StatCard(
+                    // Changed to Revenue since we don't have a "Total Fee vs Paid Fee" system yet
+                    title = "Total Revenue",
+                    value = "₹${viewModel.totalRevenue.toInt()}", // Live Revenue
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             Spacer(modifier = Modifier.height(32.dp))
             Text("Quick Actions", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Quick Action Buttons
             Button(
                 onClick = { navController.navigate("add_member") },
                 modifier = Modifier.fillMaxWidth().height(55.dp)
@@ -85,7 +111,7 @@ fun DashboardScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedButton(
-                onClick = { navController.navigate("member_list")},
+                onClick = { navController.navigate("member_list") },
                 modifier = Modifier.fillMaxWidth().height(55.dp)
             ) {
                 Text("👥 View All Members", fontSize = 18.sp)
@@ -94,7 +120,6 @@ fun DashboardScreen(navController: NavController) {
     }
 }
 
-// A custom, reusable Composable for our Statistic Cards
 @Composable
 fun StatCard(title: String, value: String, modifier: Modifier = Modifier) {
     Card(

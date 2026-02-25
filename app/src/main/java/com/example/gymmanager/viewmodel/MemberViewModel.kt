@@ -78,4 +78,26 @@ class MemberViewModel : ViewModel() {
             }
         )
     }
+    // --- DASHBOARD STATISTICS ---
+
+    // Total members is just the size of the list
+    val totalMembersCount: Int
+        get() = _memberList.value.size
+
+    // Active members are the ones where isActive == true
+    val activeMembersCount: Int
+        get() = _memberList.value.count { it.isActive }
+
+    // Calculate total revenue collected
+    val totalRevenue: Double
+        get() = _memberList.value.sumOf { it.feePaid }
+
+    // Calculate how many members expire in the next 7 days
+    val expiringSoonCount: Int
+        get() = _memberList.value.count { member ->
+            val today = System.currentTimeMillis()
+            val sevenDaysInMillis = 7L * 24 * 60 * 60 * 1000
+            // Check if the expiry date falls between today and 7 days from now
+            member.expiryDate in today..(today + sevenDaysInMillis)
+        }
 }
