@@ -1,5 +1,6 @@
 package com.example.gymmanager.screen
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -97,7 +98,7 @@ fun MemberListScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(filteredMembers) { member ->
-                        MemberItemCard(member = member)
+                        MemberItemCard(member = member,navController = navController)
                     }
                 }
             }
@@ -106,14 +107,19 @@ fun MemberListScreen(
 }
 
 // Upgraded Card Design
+// 👇 Add navController to the parameters here
 @Composable
-fun MemberItemCard(member: Member) {
+fun MemberItemCard(member: Member, navController: NavController) {
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     val joinDateString = dateFormat.format(Date(member.joinDate))
     val expiryDateString = dateFormat.format(Date(member.expiryDate))
 
+    // Don't forget to import androidx.compose.foundation.clickable at the top of your file if Android Studio asks!
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        // 👇 Add the .clickable modifier here to trigger the navigation!
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { navController.navigate("edit_member/${member.id}") },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -125,7 +131,7 @@ fun MemberItemCard(member: Member) {
             ) {
                 Text(text = member.name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
-                // --- NEW: PLAN BADGE ---
+                // --- PLAN BADGE ---
                 Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     shape = MaterialTheme.shapes.small
@@ -144,7 +150,7 @@ fun MemberItemCard(member: Member) {
             Text(text = "📞 ${member.phoneNumber}", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(12.dp))
 
-            // --- NEW: DISPLAYING JOIN DATE ---
+            // --- DISPLAYING JOIN DATE ---
             Text(text = "Joined: $joinDateString", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             val statusColor = if (member.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error

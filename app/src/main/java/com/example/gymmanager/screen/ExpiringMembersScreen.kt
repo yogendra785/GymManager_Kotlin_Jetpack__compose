@@ -18,6 +18,11 @@ import androidx.navigation.NavController
 import com.example.gymmanager.model.Member
 import com.example.gymmanager.viewmodel.MemberViewModel
 import java.text.SimpleDateFormat
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import java.net.URLEncoder
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,17 +83,18 @@ fun ExpiringMemberCard(member: Member) {
     val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     val expiryDateString = dateFormat.format(Date(member.expiryDate))
 
-    // Calculate days remaining
     val today = System.currentTimeMillis()
     val diffInMillis = member.expiryDate - today
     val daysRemaining = (diffInMillis / (1000 * 60 * 60 * 24)).toInt()
 
-    // Determine color and status text
     val (statusText, statusColor) = when {
         daysRemaining < 0 -> Pair("Expired ${-daysRemaining} days ago", Color.Red)
         daysRemaining == 0 -> Pair("Expires TODAY", Color.Red)
-        else -> Pair("Expires in $daysRemaining days", Color(0xFFE65100)) // Orange
+        else -> Pair("Expires in $daysRemaining days", Color(0xFFE65100))
     }
+
+    // 👇 This gets the Android Context, which we need to launch other apps
+    val context = LocalContext.current
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -96,10 +102,48 @@ fun ExpiringMemberCard(member: Member) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = member.name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "📞 ${member.phoneNumber}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column {
+                    Text(text = member.name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "📞 ${member.phoneNumber}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                // 👇 THE WHATSAPP BUTTON 👇
+                Button(
+                    onClick = {
+                        // 1. Clean the phone number (remove spaces)
+                        val cleanPhone = member.phoneNumber.filter { it.isDigit() }
+                        // Assuming Indian numbers, add 91 if it's 10 digits
+                        val formattedPhone = if (cleanPhone.length == 10) "91$cleanPhone" else cleanPhone
+
+                        // 2. Draft the message
+                        val message = "Hi ${member.name}, your gym membership expired on $expiryDateString. Please renew it soon to continue your workouts!"
+                        val encodedMessage = URLEncoder.encode(message, "UTF-8")
+
+                        // 3. Create the Intent to open WhatsApp
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            data = Uri.parse("https://wa.me/$formattedPhone?text=$encodedMessage")
+                        }
+
+                        // 4. Try to open it! (Use a try-catch just in case they don't have WhatsApp installed)
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)) // WhatsApp Green!
+                ) {
+                    Text("Remind", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             Text(
                 text = statusText,

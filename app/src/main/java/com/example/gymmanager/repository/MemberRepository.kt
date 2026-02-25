@@ -55,4 +55,18 @@ class MemberRepository {
                 }
             }
     }
+    // Update an existing member
+    fun updateMember(member: Member, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        val uid = auth.currentUser?.uid
+        if (uid == null) {
+            onError("User not logged in!")
+            return
+        }
+
+        firestore.collection("users").document(uid).collection("members")
+            .document(member.id) // 👈 We point to the EXACT existing ID
+            .set(member)         // 👈 This overwrites the old data with the new data
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { e -> onError(e.message ?: "Failed to update member") }
+    }
 }

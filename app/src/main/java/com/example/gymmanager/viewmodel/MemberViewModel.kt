@@ -117,4 +117,46 @@ class MemberViewModel : ViewModel() {
                 member.expiryDate <= (today + sevenDaysInMillis)
             }.sortedBy { it.expiryDate } // Sort them so the oldest dates show up first
         }
+
+    // Find a single member from our downloaded list
+    fun getMemberById(id: String): Member? {
+        return _memberList.value.find { it.id == id }
+    }
+
+    // Save the edited details
+    fun updateMemberDetails(
+        originalMember: Member,
+        newName: String,
+        newPhone: String,
+        newFeeString: String,
+        onSuccess: () -> Unit
+    ) {
+        val fee = newFeeString.toDoubleOrNull()
+        if (newName.isBlank() || newPhone.isBlank() || fee == null) {
+            _errorMessage.value = "Please enter valid details"
+            return
+        }
+
+        _isLoading.value = true
+        _errorMessage.value = null
+
+        // Make a copy of the original member, but swap in the new text
+        val updatedMember = originalMember.copy(
+            name = newName,
+            phoneNumber = newPhone,
+            feePaid = fee
+        )
+
+        repository.updateMember(
+            member = updatedMember,
+            onSuccess = {
+                _isLoading.value = false
+                onSuccess()
+            },
+            onError = { error ->
+                _isLoading.value = false
+                _errorMessage.value = error
+            }
+        )
+    }
 }
