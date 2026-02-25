@@ -76,7 +76,7 @@ fun DashboardScreen(navController: NavController) {
 
             // Quick Action Buttons
             Button(
-                onClick = { /* TODO: Navigate to Add Member Screen */ },
+                onClick = { navController.navigate("add_member") },
                 modifier = Modifier.fillMaxWidth().height(55.dp)
             ) {
                 Text("➕ Add New Member", fontSize = 18.sp)
@@ -85,7 +85,7 @@ fun DashboardScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedButton(
-                onClick = { /* TODO: Navigate to Member List Screen */ },
+                onClick = { navController.navigate("member_list")},
                 modifier = Modifier.fillMaxWidth().height(55.dp)
             ) {
                 Text("👥 View All Members", fontSize = 18.sp)
