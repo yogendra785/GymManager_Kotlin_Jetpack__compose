@@ -1,5 +1,6 @@
 package com.example.gymmanager.screen
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -14,16 +15,31 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.gymmanager.viewmodel.MemberViewModel
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddMemberScreen(
     navController: NavController,
-    viewModel: MemberViewModel = viewModel() // 👈 Injecting the ViewModel here
+    viewModel: MemberViewModel = viewModel()
 ) {
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var fee by remember { mutableStateOf("") }
+
+    // State for the Plan Dropdown
+    var expanded by remember { mutableStateOf(false) }
+    val planOptions = listOf(1, 3, 6, 12)
+    var selectedPlan by remember { mutableStateOf(planOptions[0]) }
+
+    // State for the Date Picker
+    var showDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+
+    // Format the date to show in the text field nicely
+    val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+    val selectedDateString = dateFormat.format(Date(datePickerState.selectedDateMillis ?: System.currentTimeMillis()))
 
     val isLoading by viewModel.isLoading
     val errorMessage by viewModel.errorMessage
@@ -37,9 +53,7 @@ fun AddMemberScreen(
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             )
         }
     ) { paddingValues ->
@@ -56,7 +70,6 @@ fun AddMemberScreen(
                 label = { Text("Full Name") },
                 modifier = Modifier.fillMaxWidth()
             )
-
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
@@ -66,7 +79,53 @@ fun AddMemberScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(modifier = Modifier.height(16.dp))
 
+            // --- DATE PICKER FIELD ---
+            OutlinedTextField(
+                value = selectedDateString,
+                onValueChange = { },
+                label = { Text("Joining Date") },
+                enabled = false, // We disable typing so they HAVE to click it
+                colors = OutlinedTextFieldDefaults.colors(
+                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                    disabledBorderColor = MaterialTheme.colorScheme.outline,
+                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showDatePicker = true } // Open calendar on click
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- PLAN DROPDOWN ---
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded }
+            ) {
+                OutlinedTextField(
+                    value = "$selectedPlan Month(s)",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Membership Plan") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    planOptions.forEach { selectionOption ->
+                        DropdownMenuItem(
+                            text = { Text("$selectionOption Month(s)") },
+                            onClick = {
+                                selectedPlan = selectionOption
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
@@ -76,7 +135,6 @@ fun AddMemberScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
             )
-
             Spacer(modifier = Modifier.height(16.dp))
 
             if (errorMessage != null) {
@@ -85,15 +143,14 @@ fun AddMemberScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Show a loading spinner OR the Save button
             if (isLoading) {
                 CircularProgressIndicator()
             } else {
                 Button(
                     onClick = {
-                        // Call the ViewModel to save the data!
-                        viewModel.saveMember(name, phone, fee) {
-                            // If successful, this code runs: go back to dashboard
+                        val joinDate = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
+                        // 👈 Pass our new variables to the ViewModel!
+                        viewModel.saveMember(name, phone, fee, joinDate, selectedPlan) {
                             navController.popBackStack()
                         }
                     },
@@ -101,6 +158,21 @@ fun AddMemberScreen(
                 ) {
                     Text("Save Member")
                 }
+            }
+        }
+
+        // --- CALENDAR POPUP DIALOG ---
+        if (showDatePicker) {
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = {
+                    TextButton(onClick = { showDatePicker = false }) { Text("OK") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                }
+            ) {
+                DatePicker(state = datePickerState)
             }
         }
     }

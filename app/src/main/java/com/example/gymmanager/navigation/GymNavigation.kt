@@ -7,6 +7,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.gymmanager.screen.AddMemberScreen
 import com.example.gymmanager.screen.LoginScreen
 import com.example.gymmanager.screen.DashboardScreen
+import com.example.gymmanager.screen.ExpiringMembersScreen
 import com.example.gymmanager.screen.MemberListScreen
 import com.google.firebase.auth.FirebaseAuth
 
@@ -36,6 +37,9 @@ fun GymNavigation() {
 
         composable("member_list") {
             MemberListScreen(navController = navController)
+        }
+        composable("expiring_members") {
+            ExpiringMembersScreen(navController = navController)
         }
     }
 }

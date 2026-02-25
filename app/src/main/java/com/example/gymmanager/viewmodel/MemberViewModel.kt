@@ -35,7 +35,14 @@ class MemberViewModel : ViewModel() {
         )
     }
 
-    fun saveMember(name: String, phone: String, feeString: String, onSuccess: () -> Unit) {
+    fun saveMember(
+        name: String,
+        phone: String,
+        feeString: String,
+        joinDateMillis: Long, // 👈 Now accepts a custom date
+        planMonths: Int,      // 👈 Now accepts the plan duration
+        onSuccess: () -> Unit
+    ) {
         if (name.isBlank() || phone.isBlank() || feeString.isBlank()) {
             _errorMessage.value = "Please fill all fields"
             return
@@ -50,27 +57,25 @@ class MemberViewModel : ViewModel() {
         _isLoading.value = true
         _errorMessage.value = null
 
-        // Time calculations using milliseconds
-        val todayMillis = System.currentTimeMillis()
-        val thirtyDaysInMillis = 30L * 24 * 60 * 60 * 1000 // 30 days * 24 hrs * 60 mins * 60 secs * 1000 ms
-        val expiryMillis = todayMillis + thirtyDaysInMillis
+        // Calculate expiry based on the selected join date and the plan they chose!
+        // planMonths * 30 days * 24 hrs * 60 mins * 60 secs * 1000 ms
+        val expiryMillis = joinDateMillis + (planMonths * 30L * 24 * 60 * 60 * 1000)
 
-        // Create the Member object
         val newMember = Member(
             name = name,
             phoneNumber = phone,
-            joinDate = todayMillis,
+            joinDate = joinDateMillis,
             expiryDate = expiryMillis,
             feePaid = fee,
-            isActive = true
+            isActive = true,
+            planMonths = planMonths
         )
 
-        // Send to Repository
         repository.addMember(
             member = newMember,
             onSuccess = {
                 _isLoading.value = false
-                onSuccess() // Tell the UI it worked!
+                onSuccess()
             },
             onError = { error ->
                 _isLoading.value = false
@@ -98,6 +103,18 @@ class MemberViewModel : ViewModel() {
             val today = System.currentTimeMillis()
             val sevenDaysInMillis = 7L * 24 * 60 * 60 * 1000
             // Check if the expiry date falls between today and 7 days from now
-            member.expiryDate in today..(today + sevenDaysInMillis)
+            member.expiryDate <= (today + sevenDaysInMillis)
+        }
+
+    // Get a list of members expiring in the next 7 days OR already expired
+    val expiringMembersList: List<Member>
+        get() {
+            val today = System.currentTimeMillis()
+            val sevenDaysInMillis = 7L * 24 * 60 * 60 * 1000
+
+            return _memberList.value.filter { member ->
+                // Keep them if their expiry date is before (today + 7 days)
+                member.expiryDate <= (today + sevenDaysInMillis)
+            }.sortedBy { it.expiryDate } // Sort them so the oldest dates show up first
         }
 }

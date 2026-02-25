@@ -116,6 +116,16 @@ fun DashboardScreen(
             ) {
                 Text("👥 View All Members", fontSize = 18.sp)
             }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // The new Expiring Alert Button
+            Button(
+                onClick = { navController.navigate("expiring_members") },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.fillMaxWidth().height(55.dp)
+            ) {
+                Text("⚠️ View Expiring Members", fontSize = 18.sp, color = MaterialTheme.colorScheme.onError)
+            }
         }
     }
 }
