@@ -1,7 +1,9 @@
 package com.example.gymmanager.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.lifecycle.viewmodel.compose.viewModel // 👈 Make sure this is imported!
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -11,18 +13,37 @@ import com.example.gymmanager.screen.EditMemberScreen
 import com.example.gymmanager.screen.ExpiringMembersScreen
 import com.example.gymmanager.screen.LoginScreen
 import com.example.gymmanager.screen.MemberListScreen
-import com.example.gymmanager.viewmodel.MemberViewModel // 👈 And this!
+import com.example.gymmanager.screen.SubscriptionLockScreen // 👈 Ensure this is imported
+import com.example.gymmanager.viewmodel.MemberViewModel
 import com.google.firebase.auth.FirebaseAuth
 
 @Composable
 fun GymNavigation() {
     val navController = rememberNavController()
-
-    // 👇 THIS IS THE MAGIC! We create ONE master ViewModel here for the whole app.
     val sharedViewModel: MemberViewModel = viewModel()
-
     val auth = FirebaseAuth.getInstance()
-    val startingScreen = if(auth.currentUser !=null) "dashboard" else "login"
+
+    val startingScreen = if (auth.currentUser != null) "dashboard" else "login"
+
+    // 👇 THE SAAS BOUNCER: Observe the lock state
+    val isLocked by sharedViewModel.isSubscriptionLocked
+
+    // If locked, and they aren't already on the login or lock screen, kick them out!
+    LaunchedEffect(isLocked) {
+        val currentRoute = navController.currentDestination?.route
+        if (isLocked && currentRoute != "login" && currentRoute != "subscription_locked") {
+            navController.navigate("subscription_locked") {
+                popUpTo(0) // Wipes the backstack so they can't press "Back" to cheat
+            }
+        }
+    }
+
+    // Every time navigation starts, verify the subscription
+    LaunchedEffect(Unit) {
+        if (auth.currentUser != null) {
+            sharedViewModel.verifySubscription()
+        }
+    }
 
     NavHost(navController = navController, startDestination = startingScreen) {
 
@@ -30,8 +51,16 @@ fun GymNavigation() {
             LoginScreen(navController = navController)
         }
 
+        // 👇 THE NEW LOCK SCREEN COMPOSABLE
+        composable("subscription_locked") {
+            SubscriptionLockScreen(
+                onLogoutClick = {
+                    navController.navigate("login") { popUpTo(0) }
+                }
+            )
+        }
+
         composable("dashboard") {
-            // 👇 Pass the shared ViewModel into the screen!
             DashboardScreen(navController = navController, viewModel = sharedViewModel)
         }
 
@@ -50,7 +79,6 @@ fun GymNavigation() {
         composable("edit_member/{memberId}") { backStackEntry ->
             val memberId = backStackEntry.arguments?.getString("memberId")
             if (memberId != null) {
-                // 👇 Because it uses the Shared ViewModel, the list is already loaded and it finds the member instantly!
                 EditMemberScreen(navController = navController, memberId = memberId, viewModel = sharedViewModel)
             }
         }

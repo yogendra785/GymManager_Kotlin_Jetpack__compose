@@ -95,4 +95,29 @@ class MemberRepository {
                 onError(e.message ?: "Failed to delete member")
             }
     }
+
+    // Check if the gym owner's subscription is still valid
+    fun checkSubscriptionStatus(onResult: (Boolean, Long?) -> Unit) {
+        val uid = auth.currentUser?.uid
+        if (uid == null) {
+            onResult(false, null)
+            return
+        }
+
+        firestore.collection("users").document(uid)
+            .get()
+            .addOnSuccessListener { document ->
+                if (document.exists()) {
+                    // Get the timestamp. If null, default to 0 (Locked out)
+                    val expiry = document.getLong("subscriptionExpiry") ?: 0L
+                    val isLocked = System.currentTimeMillis() > expiry
+                    onResult(isLocked, expiry)
+                } else {
+                    onResult(true, 0L) // Lock if no document exists yet
+                }
+            }
+            .addOnFailureListener {
+                onResult(true, null) // Lock on network failure for safety
+            }
+    }
 }

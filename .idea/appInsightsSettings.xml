@@ -9,9 +9,9 @@
               <option name="connection">
                 <ConnectionSetting>
                   <option name="appId" value="com.example.gymmanager" />
-                  <option name="mobileSdkAppId" value="1:283903598779:android:288bba4fe36c2b8cf7c99e" />
-                  <option name="projectId" value="workshop-manager-d110c" />
-                  <option name="projectNumber" value="283903598779" />
+                  <option name="mobileSdkAppId" value="1:925787617852:android:e0bd2fcb261f0c64f9e139" />
+                  <option name="projectId" value="m-management-bacd9" />
+                  <option name="projectNumber" value="925787617852" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />

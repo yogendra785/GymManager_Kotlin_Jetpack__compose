@@ -4,8 +4,9 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import com.example.gymmanager.model.Member
+import com.example.gymmanager.model.PaymentRecord
 import com.example.gymmanager.repository.MemberRepository
-import java.util.Calendar // 👈 Make sure this is imported for the monthly math!
+import java.util.Calendar
 
 class MemberViewModel : ViewModel() {
 
@@ -17,6 +18,16 @@ class MemberViewModel : ViewModel() {
     val isLoading: State<Boolean> = _isLoading
 
     private val _errorMessage = mutableStateOf<String?>(null)
+
+    private val _isSubscriptionLocked = mutableStateOf(false)
+    val isSubscriptionLocked: State<Boolean> = _isSubscriptionLocked
+
+    // Trigger the repository check
+    fun verifySubscription() {
+        repository.checkSubscriptionStatus { isLocked, _ ->
+            _isSubscriptionLocked.value = isLocked
+        }
+    }
     val errorMessage: State<String?> = _errorMessage
 
     // Call this when the screen opens
@@ -35,20 +46,19 @@ class MemberViewModel : ViewModel() {
     }
 
     fun saveMember(
-        name: String,
-        phone: String,
-        feeString: String,
-        joinDateMillis: Long,
-        planMonths: Int,
-        onSuccess: () -> Unit
+        name: String, phone: String, dob: String, address: String,
+        totalFeeString: String, paidAmountString: String,
+        joinDateMillis: Long, planMonths: Int, onSuccess: () -> Unit
     ) {
-        if (name.isBlank() || phone.isBlank() || feeString.isBlank()) {
-            _errorMessage.value = "Please fill all fields"
+        if (name.isBlank() || phone.isBlank() || totalFeeString.isBlank() || paidAmountString.isBlank()) {
+            _errorMessage.value = "Please fill all required fields"
             return
         }
 
-        val fee = feeString.toDoubleOrNull()
-        if (fee == null) {
+        val totalFee = totalFeeString.toDoubleOrNull()
+        val paidAmount = paidAmountString.toDoubleOrNull()
+
+        if (totalFee == null || paidAmount == null) {
             _errorMessage.value = "Invalid fee amount"
             return
         }
@@ -56,45 +66,48 @@ class MemberViewModel : ViewModel() {
         _isLoading.value = true
         _errorMessage.value = null
 
-        // 👇 FIX: We actually define todayMillis here now!
         val todayMillis = System.currentTimeMillis()
-
         val expiryMillis = joinDateMillis + (planMonths * 30L * 24 * 60 * 60 * 1000)
+        val calculatedPending = totalFee - paidAmount
+
+        // 👇 LEDGER UPDATE: Create the very first record
+        val initialPayment = PaymentRecord(
+            amount = paidAmount,
+            date = todayMillis,
+            description = "Initial Registration (${planMonths}M Plan)"
+        )
 
         val newMember = Member(
-            name = name,
-            phoneNumber = phone,
-            joinDate = joinDateMillis,
-            expiryDate = expiryMillis,
-            feePaid = fee,
-            isActive = true,
-            planMonths = planMonths,
-            lastPaymentDate = todayMillis,
-            lastPaymentAmount = fee
+            name = name, phoneNumber = phone, dob = dob, address = address,
+            joinDate = joinDateMillis, expiryDate = expiryMillis,
+            totalPlanFee = totalFee, feePaid = paidAmount, pendingBalance = calculatedPending,
+            isActive = true, planMonths = planMonths,
+            lastPaymentDate = todayMillis, lastPaymentAmount = paidAmount,
+            paymentHistory = listOf(initialPayment) // 👈 Save the ledger to DB
         )
 
         repository.addMember(
             member = newMember,
             onSuccess = {
                 _isLoading.value = false
+                fetchMembers() // 👈 INSTANT REFRESH FIX
                 onSuccess()
             },
-            onError = { error ->
-                _isLoading.value = false
-                _errorMessage.value = error
-            }
+            onError = { _isLoading.value = false; _errorMessage.value = it }
         )
     }
 
-    // 1-Click Renew Logic
     fun renewMember(
         member: Member,
-        additionalFeeString: String,
+        newPlanTotalFeeString: String,
+        newPlanPaidAmountString: String,
         newPlanMonths: Int,
         onSuccess: () -> Unit
     ) {
-        val additionalFee = additionalFeeString.toDoubleOrNull()
-        if (additionalFee == null) {
+        val newTotalFee = newPlanTotalFeeString.toDoubleOrNull()
+        val newPaidAmount = newPlanPaidAmountString.toDoubleOrNull()
+
+        if (newTotalFee == null || newPaidAmount == null) {
             _errorMessage.value = "Invalid fee amount"
             return
         }
@@ -105,41 +118,60 @@ class MemberViewModel : ViewModel() {
         val today = System.currentTimeMillis()
         val baseDate = if (member.expiryDate < today) today else member.expiryDate
         val newExpiry = baseDate + (newPlanMonths * 30L * 24 * 60 * 60 * 1000)
-        val newTotalFee = member.feePaid + additionalFee
+
+        val accumulatedTotalFee = member.totalPlanFee + newTotalFee
+        val accumulatedFeePaid = member.feePaid + newPaidAmount
+        val newPendingBalance = accumulatedTotalFee - accumulatedFeePaid
+
+        // 👇 LEDGER UPDATE: Add the renewal to the ledger
+        val updatedHistory = member.paymentHistory.toMutableList()
+        updatedHistory.add(
+            PaymentRecord(
+                amount = newPaidAmount,
+                date = today,
+                description = "Plan Renewal (${newPlanMonths}M Plan)"
+            )
+        )
 
         val updatedMember = member.copy(
             expiryDate = newExpiry,
-            feePaid = newTotalFee,
+            totalPlanFee = accumulatedTotalFee,
+            feePaid = accumulatedFeePaid,
+            pendingBalance = newPendingBalance,
             planMonths = newPlanMonths,
             isActive = true,
             lastPaymentDate = today,
-            lastPaymentAmount = additionalFee
+            lastPaymentAmount = newPaidAmount,
+            paymentHistory = updatedHistory // 👈 Save the ledger
         )
 
         repository.updateMember(
             member = updatedMember,
             onSuccess = {
                 _isLoading.value = false
+                fetchMembers() // 👈 INSTANT REFRESH FIX
                 onSuccess()
             },
-            onError = { error ->
-                _isLoading.value = false
-                _errorMessage.value = error
-            }
+            onError = { error -> _isLoading.value = false; _errorMessage.value = error }
         )
     }
 
-    // Save the edited details
+    // Save the edited details (With fixed Cumulative Monthly Math & Ledger!)
     fun updateMemberDetails(
         originalMember: Member,
         newName: String,
         newPhone: String,
-        newFeeString: String,
+        newDob: String,
+        newAddress: String,
+        newTotalFeeString: String,
+        newPaidAmountString: String,
         isActive: Boolean,
         onSuccess: () -> Unit
     ) {
-        val fee = newFeeString.toDoubleOrNull()
-        if (newName.isBlank() || newPhone.isBlank() || fee == null) {
+        val totalFee = newTotalFeeString.toDoubleOrNull()
+        val paidAmount = newPaidAmountString.toDoubleOrNull()
+
+        if (newName.isBlank() || newPhone.isBlank() || totalFee == null || paidAmount == null) {
             _errorMessage.value = "Please enter valid details"
             return
         }
@@ -147,23 +179,62 @@ class MemberViewModel : ViewModel() {
         _isLoading.value = true
         _errorMessage.value = null
 
+        val calculatedPending = totalFee - paidAmount
+        val newlyCollectedCash = paidAmount - originalMember.feePaid
+        val todayMillis = System.currentTimeMillis()
+
+        val calendarNow = Calendar.getInstance()
+        val calendarLast = Calendar.getInstance().apply { timeInMillis = originalMember.lastPaymentDate }
+
+        val isSameMonth = calendarNow.get(Calendar.MONTH) == calendarLast.get(Calendar.MONTH) &&
+                calendarNow.get(Calendar.YEAR) == calendarLast.get(Calendar.YEAR)
+
+        val finalPaymentAmount = if (newlyCollectedCash > 0) {
+            if (isSameMonth) {
+                originalMember.lastPaymentAmount + newlyCollectedCash
+            } else {
+                newlyCollectedCash
+            }
+        } else {
+            originalMember.lastPaymentAmount
+        }
+
+        val finalPaymentDate = if (newlyCollectedCash > 0) todayMillis else originalMember.lastPaymentDate
+
+        // 👇 LEDGER UPDATE: If they paid more money, add a new line to the ledger!
+        val updatedHistory = originalMember.paymentHistory.toMutableList()
+        if (newlyCollectedCash > 0) {
+            updatedHistory.add(
+                PaymentRecord(
+                    amount = newlyCollectedCash,
+                    date = todayMillis,
+                    description = "Cleared Pending Dues"
+                )
+            )
+        }
+
         val updatedMember = originalMember.copy(
             name = newName,
             phoneNumber = newPhone,
-            feePaid = fee,
-            isActive = isActive
+            dob = newDob,
+            address = newAddress,
+            totalPlanFee = totalFee,
+            feePaid = paidAmount,
+            pendingBalance = calculatedPending,
+            isActive = isActive,
+            lastPaymentDate = finalPaymentDate,
+            lastPaymentAmount = finalPaymentAmount,
+            paymentHistory = updatedHistory // 👈 Save the ledger
         )
 
         repository.updateMember(
             member = updatedMember,
             onSuccess = {
                 _isLoading.value = false
+                fetchMembers() // 👈 INSTANT REFRESH FIX
                 onSuccess()
             },
-            onError = { error ->
-                _isLoading.value = false
-                _errorMessage.value = error
-            }
+            onError = { error -> _isLoading.value = false; _errorMessage.value = error }
         )
     }
 
@@ -175,7 +246,6 @@ class MemberViewModel : ViewModel() {
     val activeMembersCount: Int
         get() = _memberList.value.count { it.isActive }
 
-    // 👇 Calculates how many ACTIVE members expire in the next 7 days
     val expiringSoonCount: Int
         get() = _memberList.value.count { member ->
             val today = System.currentTimeMillis()
@@ -183,7 +253,6 @@ class MemberViewModel : ViewModel() {
             member.isActive && member.expiryDate <= (today + sevenDaysInMillis)
         }
 
-    // 👇 Get a list of ACTIVE members expiring in the next 7 days OR already expired
     val expiringMembersList: List<Member>
         get() {
             val today = System.currentTimeMillis()
@@ -198,7 +267,6 @@ class MemberViewModel : ViewModel() {
         return _memberList.value.find { it.id == id }
     }
 
-    // 👇 NEW: Calculates revenue ONLY for the current calendar month!
     val currentMonthRevenue: Double
         get() {
             val calendar = Calendar.getInstance()
@@ -216,7 +284,7 @@ class MemberViewModel : ViewModel() {
                 }
             }
         }
-    // --- EXCEL (CSV) EXPORT LOGIC ---
+
     // --- EXCEL (CSV) EXPORT LOGIC ---
     fun generateCsvData(): String {
         val builder = java.lang.StringBuilder()
@@ -232,14 +300,12 @@ class MemberViewModel : ViewModel() {
 
             val safeName = member.name.replace(",", " ")
 
-            // 👇 THE FIX: Notice the =\" \" around the phone number!
             builder.append("$safeName,=\"${member.phoneNumber}\",$join,$expiry,${member.feePaid},${member.planMonths},$status\n")
         }
 
         return builder.toString()
     }
 
-    // Delete a member and instantly refresh the list
     fun deleteMember(memberId: String, onSuccess: () -> Unit = {}) {
         _isLoading.value = true
         _errorMessage.value = null
@@ -248,7 +314,7 @@ class MemberViewModel : ViewModel() {
             memberId = memberId,
             onSuccess = {
                 _isLoading.value = false
-                fetchMembers() // 👈 Re-download the list so the deleted person vanishes
+                fetchMembers()
                 onSuccess()
             },
             onError = { error ->
@@ -257,4 +323,29 @@ class MemberViewModel : ViewModel() {
             }
         )
     }
+
+    val revenueHistory: List<Pair<String, Double>>
+        get() {
+            val calendar = Calendar.getInstance()
+
+            val grouped = _memberList.value
+                .filter { it.lastPaymentAmount > 0.0 }
+                .groupBy {
+                    calendar.timeInMillis = it.lastPaymentDate
+                    val year = calendar.get(Calendar.YEAR)
+                    val month = calendar.get(Calendar.MONTH)
+                    Pair(year, month)
+                }
+                .mapValues { entry -> entry.value.sumOf { it.lastPaymentAmount } }
+                .toList()
+                .sortedWith(compareByDescending<Pair<Pair<Int, Int>, Double>> { it.first.first }.thenByDescending { it.first.second })
+
+            val displayFormat = java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault())
+
+            return grouped.map {
+                calendar.set(Calendar.YEAR, it.first.first)
+                calendar.set(Calendar.MONTH, it.first.second)
+                Pair(displayFormat.format(calendar.time), it.second)
+            }
+        }
 }
